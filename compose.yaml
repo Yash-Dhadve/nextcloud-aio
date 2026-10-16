@@ -1,0 +1,45 @@
+# ==============================================================================
+# Production Docker Compose for Nextcloud AIO on Dedicated Debian Host
+# ==============================================================================
+# Architecture:
+# - Nextcloud AIO Mastercontainer manages all internal microservices (Postgres, Redis, Apache, Nextcloud)
+# - Apache container is instructed to listen on port 11000 on the loopback interface (127.0.0.1)
+# - Host-level Tailscale terminates HTTPS (port 443) and proxies to 127.0.0.1:11000
+# - Zero router port-forwarding required; Tailscale Funnel enables public access for friends/family
+# ==============================================================================
+
+services:
+  nextcloud-aio-mastercontainer:
+    image: ghcr.io/nextcloud-releases/all-in-one:latest
+    init: true
+    container_name: nextcloud-aio-mastercontainer
+    restart: always
+    ports:
+      # AIO Administrative & Container Setup Interface (LAN/Localhost only)
+      - "8080:8080"
+    environment:
+      # Port for the internal Nextcloud Apache container
+      - APACHE_PORT=11000
+      # Bind strictly to loopback so only Tailscale/local proxy can reach it
+      - APACHE_IP_BINDING=127.0.0.1
+      # Skip public internet port 443 reachability check (uses private/Tailscale domain)
+      - SKIP_DOMAIN_VALIDATION=true
+      
+      # OPTIONAL CONFIGURATIONS (Uncomment to customize):
+      # Custom path for Nextcloud user files (e.g. secondary HDD/SSD mount):
+      # - NEXTCLOUD_DATADIR=/mnt/storage/nextcloud_data
+      # Custom PHP memory limit:
+      # - NEXTCLOUD_MEMORY_LIMIT=1024M
+      # Custom max file upload limit:
+      # - NEXTCLOUD_UPLOAD_LIMIT=10G
+      # Custom max execution timeout for large uploads:
+      # - NEXTCLOUD_MAX_TIME=7200
+    volumes:
+      # Mastercontainer persistent configuration & encryption secrets
+      - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
+      # Docker socket access so AIO can spawn and manage child containers
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  nextcloud_aio_mastercontainer:
+    name: nextcloud_aio_mastercontainer
